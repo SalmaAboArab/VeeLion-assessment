@@ -1,48 +1,40 @@
+
 # Code Review — VeeLion Backend Assessment
 
-## Performance
+## 1. Performance
 
-- **Synchronous file I/O in Activity Log:** `readFileSync`/`writeFileSync` blocked the event loop during requests. Replaced with the shared asynchronous JSON store.
-- **Repeated JSON file access patterns:** centralized JSON reads/writes in `src/utils/jsonStore.js` to avoid duplicate implementations.
-- **Unnecessary debug output:** removed request-summary `console.log` statements from the Reports controller/service.
+- **Synchronous file I/O in Activity Log:** Using `readFileSync` and `writeFileSync` blocks the event loop while processing requests.
+- **Repeated JSON file access logic:** JSON reading and writing logic is duplicated across the codebase.
+- **Unnecessary debug logging:** Reports controller and service contain console logs that clutter server output.
 
-## Maintainability
+## 2. Maintainability
 
-- **Duplicate task validation:** the task validator existed but was not used by the controller. Create and update controllers now use `validateCreateTask` and `validateUpdateTask`.
-- **Inconsistent naming:** Activity controller functions now use descriptive camelCase names.
-- **Repeated data paths / dependence on process.cwd():** moved data file paths into `src/utils/dataPaths.js`, resolved relative to the project files.
-- **Incomplete endpoint documentation:** README now documents routes and representative payloads.
+- **Unused task validator:** A task validation module exists but is not consistently used by the controllers.
+- **Inconsistent naming:** Activity controller functions use inconsistent or unclear naming conventions.
+- **Scattered data file paths:** Data paths rely on repeated definitions and `process.cwd()`, making file resolution dependent on the working directory.
+- **Incomplete API documentation:** The README does not fully document the available endpoints and their expected request and response formats.
 
-## UX / API behavior
+## 3. API Behavior and Error Handling
 
-- **Unclear validation errors:** invalid request bodies now return consistent 400 responses, including unsupported fields.
-- **Missing resource handling:** unknown task IDs return 404 through the shared error handler.
-- **Reports endpoint naming:** retained `GET /reports` for compatibility and added `GET /reports/tasks-summary` as an explicit summary endpoint.
-- **Activity visibility:** task creation, updates, and deletion now add activity log entries. Activity results are returned newest first.
+- **Inconsistent validation errors:** Invalid request bodies and unsupported fields are not handled consistently.
+- **Missing resource handling:** Requests involving unknown task IDs need consistent `404 Not Found` responses.
+- **Unclear reports endpoint naming:** The reports endpoint does not clearly communicate the type of report returned.
+- **Incomplete activity logging:** Task creation, updates, and deletion are not consistently reflected in the activity log.
+- **Activity ordering:** Activity entries need a consistent ordering, with the newest entries appearing first.
+- **Malformed JSON handling:** Invalid JSON request bodies need to produce an appropriate `400 Bad Request` response instead of an internal server error.
 
-## Code quality
+## 4. Code Quality and Data Integrity
 
-- **Task update accepted arbitrary properties:** updates are restricted to `title` and `completed`; callers cannot overwrite `id`, `createdAt`, or other server-managed fields.
-- **Service mutated incoming payload:** task creation now uses a normalized object instead of mutating the request payload.
-- **Invalid JSON store shape was silently accepted:** the JSON store now reports a malformed store shape rather than silently returning an empty array.
-- **Unsafe/non-atomic file writes:** JSON writes now use a temporary file followed by rename, and create parent directories when necessary.
-- **Port fallback expression was unreachable:** changed `process.env.PORT || 4000 || 3000` to `Number(process.env.PORT) || 4000`.
-- **Malformed JSON requests:** the shared error handler responds with HTTP 400 rather than treating invalid JSON as an internal server error.
+- **Unrestricted task updates:** The update logic accepts arbitrary properties, potentially allowing protected fields such as `id` and `createdAt` to be overwritten.
+- **Mutation of incoming payloads:** Task creation modifies the incoming request object instead of creating a normalized task object.
+- **Invalid JSON store shape:** The JSON storage utility may silently treat an unexpected data structure as an empty array, masking data integrity problems.
+- **Unsafe file writes:** Writing directly to JSON files without an atomic replacement strategy risks leaving incomplete data if a write is interrupted.
+- **Missing directory handling:** JSON storage operations may fail when the required parent directory does not exist.
+- **Incorrect port fallback expression:** The expression `process.env.PORT || 4000 || 3000` never falls back to port `3000`.
+- **Incomplete update validation:** Update requests need explicit validation of allowed fields and their expected types.
 
-## React best practices
+## 5. Reports and Data Model
 
-This repository is the Express backend; React components are not present here, so React-specific best practices cannot be assessed from this folder. The frontend should consume the documented response shapes and handle loading, empty, and error states.
-
-## Known limitation / follow-up
-
-The task model currently contains a boolean `completed` field, not a three-state status. Therefore `todo` and `done` can be calculated accurately, but `in-progress` remains `0` until the data model and API contract explicitly support that state. `recentActivityCount` is defined as activity created in the last seven days.
-
-## Suggested manual verification
-
-1. `GET /tasks` — returns `{ "data": [...] }`.
-2. `POST /tasks` with `{ "title": "Review API" }` — returns 201 and creates an activity entry.
-3. `PATCH /tasks/:id` with `{ "completed": true }` — returns the updated task and creates an activity entry.
-4. `PATCH /tasks/:id` with `{ "id": "changed" }` — returns 400.
-5. `DELETE /tasks/:id` — returns 204 and creates an activity entry.
-6. `GET /activity` — returns activity entries newest first.
-7. `GET /reports/tasks-summary` — returns task counts and activity count for the last seven days.
+- **Limited task status model:** The task model uses a boolean `completed` field and cannot distinguish between `todo`, `in-progress`, and `done`.
+- **Inaccurate in-progress count:** The reports service cannot calculate the actual number of in-progress tasks without an explicit status field.
+- **Unclear recent activity definition:** The criteria for counting recent activity need to be consistently defined.
