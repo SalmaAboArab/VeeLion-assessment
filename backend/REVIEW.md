@@ -1,1 +1,0 @@
-- Apply asyncHandler to all endpoints
